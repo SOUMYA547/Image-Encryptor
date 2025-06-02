@@ -5,12 +5,11 @@ from flask import Flask, request, render_template_string, send_file
 from werkzeug.utils import secure_filename
 import secrets
 
-# ----------- PASSWORD GENERATION -----------
+
 def generate_strong_password(length=16):
     chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+"
     return ''.join(secrets.choice(chars) for _ in range(length))
 
-# ----------- FLASK INTERFACE -----------
 flask_app = Flask(__name__)
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
