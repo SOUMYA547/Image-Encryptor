@@ -1,17 +1,17 @@
 import os
 import time
 import math
-from flask import Flask, request, render_template_string, send_file
+from flask import Flask, request, render_template_string, send_file, after_this_request
 from werkzeug.utils import secure_filename
 import secrets
-
 
 def generate_strong_password(length=16):
     chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+"
     return ''.join(secrets.choice(chars) for _ in range(length))
 
 flask_app = Flask(__name__)
-UPLOAD_FOLDER = 'uploads'
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 @flask_app.route('/', methods=['GET', 'POST'])
@@ -99,6 +99,7 @@ def index():
                 <input type="submit" name="action" value="🔒Encrypt">
                 <input type="submit" name="action" value="🔓Decrypt">
             </form>
+            {{ stats|safe }}
         </div>
     </body>
     </html>
@@ -108,39 +109,50 @@ def index():
         file = request.files['file']
         password = request.form['password']
         action = request.form['action']
-
         filename = secure_filename(file.filename)
-        filepath = os.path.join(UPLOAD_FOLDER, filename)
-        file.save(filepath)
-
-        with open(filepath, 'rb') as f:
-            data = f.read()
+        input_path = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(input_path)
 
         try:
+            with open(input_path, 'rb') as f:
+                data = f.read()
+
             start = time.time()
-            if action == 'Encrypt':
-                result = data[::-1]  # basic reverse as dummy encryption
+
+            if action == '🔒Encrypt':
+                result = data[::-1]
                 output_filename = filename + '.enc'
             else:
-                result = data[::-1]  # reverse back
+                result = data[::-1]
                 output_filename = 'decrypted_' + filename.replace('.enc', '')
 
-            end = time.time()
-            out_path = os.path.join(UPLOAD_FOLDER, output_filename)
-            with open(out_path, 'wb') as f:
+            output_path = os.path.join(UPLOAD_FOLDER, output_filename)
+            with open(output_path, 'wb') as f:
                 f.write(result)
+
+            end = time.time()
 
             entropy = len(password) * math.log2(len(set(password))) if password else 0
             stats_html = f"""
                 <div class='stats'>
-                ✅ <b>{action}ion</b> completed in <b>{end - start:.4f}</b>s<br>
+                ✅ <b>{action}</b> completed in <b>{end - start:.4f}</b>s<br>
                 📦 Original size: {len(data)} bytes<br>
-                🔐 Encrypted size: {len(result)} bytes<br>
+                🔐 Processed size: {len(result)} bytes<br>
                 🧠 Entropy: {entropy:.2f} bits
                 </div>
             """
 
-            return send_file(out_path, as_attachment=True)
+            @after_this_request
+            def cleanup(response):
+                try:
+                    os.remove(input_path)
+                    os.remove(output_path)
+                except Exception:
+                    pass
+                return response
+
+            return send_file(output_path, as_attachment=True)
+
         except Exception as e:
             stats_html = f"<p style='color:red;'>❌ Error: {str(e)}</p>"
 
